@@ -290,7 +290,7 @@ depositTx = response.txId;
 
         <h2 className="flex justify-center mt-10 mb-1 text-md font-bold">How does it work?</h2>
         <div>
-          One needs to send a simple Bitcoin Cash transaction to this service's deposit address.<br />
+          One needs to send a simple Bitcoin Cash transaction to this service&#39;s deposit address.<br />
           The transaction must pay a pinning fee and specify the URL of a remote file which needs to be pinned on IPFS using an OP_RETURN output.<br />
           The OP_RETURN format is the following: <pre className="inline font-semibold">{`<'IPBC'> <'PIN'> <'URL'>`}</pre>, where <pre className="inline font-semibold">{`<>`}</pre> denotes a data chunk pushed to bitcoin VM stack.<br />
           The IPFS-BCH service constantly monitors the deposit address and upon arrival of a pin request transaction will download the remote file and upload it to IPFS.<br />
