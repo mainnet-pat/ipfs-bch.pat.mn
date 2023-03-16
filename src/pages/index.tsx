@@ -281,7 +281,7 @@ depositTx = response.txId;
         <h2 className="flex justify-center mt-10 mb-1 text-md font-bold">WTH is IPFS-BCH?</h2>
         <div>
           IPFS-BCH allows to publish user content on IPFS with ease, in a permissionless fashion. No KYC or registartion needed.<br/>
-          It is an ideal tool to upload your <a target="_blank" rel="noreferrer" className="pl-1 text-sky-700" href={`https://github.com/bitjson/chip-bcmr`}>BCMR</a> data and use it in your applications.
+          It is an ideal tool to upload your <a target="_blank" rel="noreferrer" className="pl-1 text-sky-700" href={`https://github.com/bitjson/chip-bcmr`}>BCMR</a> data and use it in your applications.<br/>
           <br/>
           This service is in beta and provided to you as is without any liability for lost funds. <br/>
           Current fee rate for file upload is 0.0025 BCH, max file size is 100kb. <br/>
@@ -301,7 +301,7 @@ depositTx = response.txId;
 
         <div className="flex flex-col mt-5 items-center mb-5">
           <div className="text-lg ">Pinning files on IPFS can be easily scripted in your workflows using
-            <a target="_blank" rel="noreferrer" className="pl-2 text-sky-700" href={`https://mainnet.cash`}>{`mainnet.cash`}</a>:
+            <a target="_blank" rel="noreferrer" className="pl-2 text-sky-700" href={`https://mainnet.cash`}>{`mainnet.cash`}</a>
             <button type="button" onClick={() => setShowCode(!showCode)} className="ml-5 inline-block px-6 py-2.5 bg-gray-200 text-gray-700 font-medium text-xs leading-tight uppercase rounded shadow-md hover:bg-gray-300 hover:shadow-lg  active:bg-gray-400 active:shadow-lg transition duration-150 ease-in-out">Show Code</button>
           </div>
         </div>
