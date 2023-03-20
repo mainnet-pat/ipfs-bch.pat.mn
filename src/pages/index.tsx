@@ -1,111 +1,20 @@
 import Head from 'next/head'
 import styles from '@/styles/Home.module.css'
 import Image from 'next/image'
-import { DefaultProvider, OpReturnData, Wallet, binToHex, qrAddress } from 'mainnet-js'
+import { DefaultProvider, OpReturnData, TestNetWallet, Wallet, binToHex, qrAddress } from 'mainnet-js'
 import { useCallback, useEffect, useState } from 'react';
 import { useDebounce } from "use-debounce";
 import axios from "axios";
-import { binToNumberUint16LE, binToUtf8, hexToBin, utf8ToBin } from '@bitauth/libauth';
+import { binToNumberUint16LE, binToNumberUint32LE, binToUtf8, hexToBin, utf8ToBin } from '@bitauth/libauth';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { githubGist } from 'react-syntax-highlighter/dist/cjs/styles/hljs';
 
 DefaultProvider.servers.mainnet = ["wss://bch.imaginary.cash:50004"];
 
-const parseOpReturn = (opReturnHex: string): Uint8Array[] => {
-  const opReturn = hexToBin(opReturnHex);
-  const chunks: Uint8Array[] = [];
-  let position = 1;
-
-  // handle direct push, OP_PUSHDATA1, OP_PUSHDATA2;
-  // OP_PUSHDATA4 is not supported in OP_RETURNs by consensus
-  while (opReturn[position]) {
-    let length = 0;
-    if (opReturn[position] === 0x4c) {
-      length = opReturn[position + 1];
-      position += 2;
-    } else if (opReturn[position] === 0x4d) {
-      length = binToNumberUint16LE(
-        opReturn.slice(position + 1, position + 3)
-      );
-      position += 3;
-    } else {
-      length = opReturn[position];
-      position += 1;
-    }
-
-    chunks.push(opReturn.slice(position, position + length));
-    position += length;
-  }
-
-  return chunks;
-}
-
-const isValidUrl = (url: string): boolean => {
-  try {
-    new URL(url);
-    return true;
-  } catch (err) {
-    return false;
-  }
-}
-
-function fetchUrl(url, token) {
-  return axios
-    .head(url, {
-      cancelToken: token,
-      headers: {  }
-    })
-}
-
 const depositWallet = await Wallet.watchOnly("bitcoincash:qrsl56haj6kcw7v7lw9kzuh89v74maemqsq8h4rfqy");
 const receiptWallet = await Wallet.watchOnly("bitcoincash:qqk49pam6ehhzen69ur9stzvnukhwm4mmc5l83anug");
 
-// fetchUrl("https://gist.githubusercontent.com/mr-zwets/91caf52be18a94ba0afa93823e890bc9/raw", undefined);
-
 export default function Home() {
-  const exampleCode = `
-// deposit transaction to monitor, will be set later
-let depositTx;
-
-// create a mainnet Wallet instance to monitor file upload receipts
-const receiptWallet = await Wallet.watchOnly("bitcoincash:qqk49pam6ehhzen69ur9stzvnukhwm4mmc5l83anug");
-
-// set up file upload monitoring
-receiptWallet.watchAddressTransactions((tx) => {
-  // find OP_RETURN data
-  const opReturn = tx.vout.find(val => val.scriptPubKey.type === "nulldata")?.scriptPubKey.hex;
-  if (!opReturn) {
-    return;
-  }
-
-  // parse OP_RETURN, do sanity checks and ensure the arrived receipt is for our deposit transaction
-  const chunks = OpReturnData.parse(opReturn);
-  if (chunks.length !== 4 || chunks[0] !== "IPBC" || chunks[2] !== depositTx) {
-    return;
-  }
-
-  const ipfsCID = chunks[3];
-
-  // your code here
-  console.log(ipfsCID);
-});
-
-// create a mainnet Wallet instance from WIF, assuming it was exported to system environment
-const wallet = await Wallet.fromId(
-  \`wif:mainnet:\${process.env.PRIVATE_WIF!}\`
-);
-
-// send pin request alongside with payment
-const response = await wallet.send([
-  OpReturnData.fromArray(["IPBC", "PIN", "https://gist.githubusercontent.com/mr-zwets/91caf52be18a94ba0afa93823e890bc9/raw"]),
-  {cashaddr: "bitcoincash:qrsl56haj6kcw7v7lw9kzuh89v74maemqsq8h4rfqy", value: 0.0025, unit: "bch"},
-]);
-
-// update deposit transaction hash here so that it will be used in receipt monitoring
-depositTx = response.txId;
-  `;
-
-
   const [url, setUrl] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [debouncedUrl] = useDebounce(url, 500);
@@ -117,6 +26,32 @@ depositTx = response.txId;
   const [receiptTx, setReceiptTx] = useState<string>("");
   const [pinnedCID, setPinnedCID] = useState<string>("");
   const [showCode, setShowCode] = useState<boolean>(false);
+  const [showRawData, setShowRawData] = useState<boolean>(false);
+  const [rawData, setRawData] = useState<string>("");
+  const [fee, setFee] = useState<number>(250000);
+  const [maxSize, setMaxSize] = useState<number>(100 * 1024);
+
+  useEffect(() => {
+    (async () => {
+      const paramsWallet = await TestNetWallet.watchOnly("bchtest:qpw8j4qvwh5kr6q073huvpsye7vkp3v08segnzxdnd");
+      const utxos = await paramsWallet.getTokenUtxos("d599887d6059233a620034cb2c136fa5ec30ca952cad0b2b4fa9e762b0adec22");
+      const commitment = utxos[0].token?.commitment;
+      if (!commitment) {
+        return;
+      }
+
+      const binToNumberUint32BE = (bin) => {
+        const view = new DataView(bin.buffer, bin.byteOffset, bin.byteLength);
+        const readAsLittleEndian = false;
+        return view.getUint32(0, readAsLittleEndian);
+      }
+
+      const fee = binToNumberUint32BE(hexToBin(commitment.slice(0, 8)));
+      const size = binToNumberUint32BE(hexToBin(commitment.slice(8)));
+      setFee(fee);
+      setMaxSize(size);
+    })();
+  }, []);
 
   const clear = useCallback(async () => {
     setUrl("");
@@ -125,14 +60,58 @@ depositTx = response.txId;
     setDepositTx("");
     setReceiptTx("");
     setPinnedCID("");
+    setShowRawData(false);
+    setRawData("");
     if (watchDepositCancel) watchDepositCancel();
     if (watchReceiptCancel) watchReceiptCancel();
   }, [watchDepositCancel, watchReceiptCancel]);
 
-  // const handleUrl =  (event) => {
-  //   setUrl(event.target.value);
-  //   setOpReturnData(OpReturnData.fromArray(["IPBC", "PIN", event.target.value]).buffer.toString("hex").slice(2));
-  // };
+  const upload = useCallback(async (fileOrRawData: string | File) => {
+    let size = 0;
+    const formData = new FormData();
+    if (typeof fileOrRawData === "string") {
+      size = fileOrRawData.length;
+      formData.append("file", new Blob([rawData], {
+        type: 'text/plain'
+      }));
+    } else {
+      size = fileOrRawData.size;
+      formData.append("file", fileOrRawData);
+    }
+
+    if (size > maxSize) {
+      setError(`Raw data size exceeds 100kb (${Math.round(size/1024)} kb)`)
+      return;
+    }
+    if (size === 0) {
+      setError(`Empty data`);
+      return;
+    }
+    setError("");
+
+    try {
+      const response = await axios.post("https://ipfs.pat.mn/u/", formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      const url = response.data?.url;
+      if (url) {
+        setUrl(url);
+        setShowRawData(false);
+        setRawData("");
+      }
+    } catch (e) {
+      setError(`Error uploading file: ${(e as any)?.response?.data?.error}`);
+    }
+  }, [rawData, maxSize]);
+
+  const fileSelected = useCallback(async (event) => {
+    if (event.target.files?.[0]) {
+      upload(event.target.files[0]).finally(() => event.target.value = "");
+    }
+  }, [upload]);
+
   useEffect(() => {
     const source = axios.CancelToken.source();
     if (debouncedUrl) {
@@ -143,19 +122,21 @@ depositTx = response.txId;
       if (debouncedUrl.length > 210) {
         setError(`URL length too long (${debouncedUrl.length}) to fit into OP_RETURN`);
         return;
+      } else {
+        setError("");
       }
 
       fetchUrl(debouncedUrl, source.token)
         .then((response) => {
           const remoteSize = parseInt(response.headers["content-length"]);
-          if (remoteSize > 100 * 1024) {
+          if (remoteSize > maxSize) {
             setError(`Remote content exceeds 100kb (${Math.round(remoteSize/1024)} kb)`)
           }
 
           setError("");
           const data = OpReturnData.fromArray(["IPBC", "PIN", debouncedUrl]).buffer.toString("hex");
           setOpReturnData(data);
-          setPayString(`bitcoincash:qrsl56haj6kcw7v7lw9kzuh89v74maemqsq8h4rfqy?amount=0.0025&op_return_raw=${data.slice(2)}`);
+          setPayString(`bitcoincash:qrsl56haj6kcw7v7lw9kzuh89v74maemqsq8h4rfqy?amount=${fee / 1e8}&op_return_raw=${data.slice(2)}`);
         })
         .catch((e) => {
           if (axios.isCancel(source)) {
@@ -171,7 +152,7 @@ depositTx = response.txId;
         "Canceled because of component unmounted or debounce Text changed"
       );
     };
-  }, [debouncedUrl]);
+  }, [debouncedUrl, fee, maxSize]);
 
   useEffect(() => {
     // if (watchDepositCancel) {
@@ -225,8 +206,11 @@ depositTx = response.txId;
         <h2 className="flex justify-center mb-3 text-md font-bold">IPFS file pinning service with on-chain settlement</h2>
 
         <div className="flex flex-col justify-center">
-          <div className="flex flex-row justify-center">
+          <div className="flex flex-row justify-center gap-3">
             <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="URL of a remote file to pin" type="text" className="form-control block w-full lg:w-7/12 px-3 py-1.5 text-base font-normal text-gray-700 bg-white bg-clip-padding border border-solid border-gray-300 rounded transition ease-in-out m-0 focus:text-gray-700 focus:bg-white focus:border-blue-600 focus:outline-none"/>
+            <button type="button" onClick={() => setShowRawData(!showRawData)} className="inline-block px-6 py-2.5 bg-gray-200 text-gray-700 font-medium text-xs leading-tight uppercase rounded shadow-md hover:bg-gray-300 hover:shadow-lg  active:bg-gray-400 active:shadow-lg transition duration-150 ease-in-out">Paste Raw Data</button>
+            <button type="button" onClick={() => document.getElementById('fileInput')?.click()} className="inline-block px-6 py-2.5 bg-gray-200 text-gray-700 font-medium text-xs leading-tight uppercase rounded shadow-md hover:bg-gray-300 hover:shadow-lg  active:bg-gray-400 active:shadow-lg transition duration-150 ease-in-out">Upload local file</button>
+            <input type="file" id="fileInput" className="hidden" onChange={fileSelected} />
             <button type="button" onClick={clear} className="inline-block px-6 py-2.5 bg-gray-200 text-gray-700 font-medium text-xs leading-tight uppercase rounded shadow-md hover:bg-gray-300 hover:shadow-lg  active:bg-gray-400 active:shadow-lg transition duration-150 ease-in-out">Clear</button>
           </div>
           {error.length > 0 && <div className="flex text-lg justify-center text-red-500">{error}</div>}
@@ -249,6 +233,22 @@ depositTx = response.txId;
             <span className="max-w-[600px] break-words break-all text-xs">{payString}</span>
           </div>
         }
+
+        {showRawData &&
+          <div className="mt-5 p-5 overflow-y-scroll border-black border-2 border-solid whitespace-pre-wrap h-[500px] font-mono text-sm">
+            <textarea
+              className="peer block min-h-[auto] h-4/5 w-full rounded border-0 bg-white py-[0.32rem] px-3 leading-[1.6]"
+              onChange={(event) => setRawData(event.target.value)}
+              value={rawData}
+              placeholder="Raw data">
+            </textarea>
+            <div className="flex justify-center items-center gap-5 mt-7">
+              <button type="button" onClick={() => upload(rawData)} className="inline-block px-6 py-2.5 bg-gray-200 text-gray-700 font-medium text-xs leading-tight uppercase rounded shadow-md hover:bg-gray-300 hover:shadow-lg  active:bg-gray-400 active:shadow-lg transition duration-150 ease-in-out">Save</button>
+              <button type="button" onClick={() => { setRawData(""); setShowRawData(false); }} className="inline-block px-6 py-2.5 bg-gray-200 text-gray-700 font-medium text-xs leading-tight uppercase rounded shadow-md hover:bg-gray-300 hover:shadow-lg  active:bg-gray-400 active:shadow-lg transition duration-150 ease-in-out">Cancel</button>
+            </div>
+          </div>
+        }
+
 
         {depositTx.length > 0 &&
           <div className="flex flex-col mt-5 items-center">
@@ -331,3 +331,91 @@ depositTx = response.txId;
     </>
   )
 }
+
+const parseOpReturn = (opReturnHex: string): Uint8Array[] => {
+  const opReturn = hexToBin(opReturnHex);
+  const chunks: Uint8Array[] = [];
+  let position = 1;
+
+  // handle direct push, OP_PUSHDATA1, OP_PUSHDATA2;
+  // OP_PUSHDATA4 is not supported in OP_RETURNs by consensus
+  while (opReturn[position]) {
+    let length = 0;
+    if (opReturn[position] === 0x4c) {
+      length = opReturn[position + 1];
+      position += 2;
+    } else if (opReturn[position] === 0x4d) {
+      length = binToNumberUint16LE(
+        opReturn.slice(position + 1, position + 3)
+      );
+      position += 3;
+    } else {
+      length = opReturn[position];
+      position += 1;
+    }
+
+    chunks.push(opReturn.slice(position, position + length));
+    position += length;
+  }
+
+  return chunks;
+}
+
+const isValidUrl = (url: string): boolean => {
+  try {
+    new URL(url);
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+const fetchUrl = (url, token) => {
+  return axios
+    .head(url, {
+      cancelToken: token,
+      headers: {  }
+    })
+}
+
+const exampleCode = `
+// deposit transaction to monitor, will be set later
+let depositTx;
+
+// create a mainnet Wallet instance to monitor file upload receipts
+const receiptWallet = await Wallet.watchOnly("bitcoincash:qqk49pam6ehhzen69ur9stzvnukhwm4mmc5l83anug");
+
+// set up file upload monitoring
+receiptWallet.watchAddressTransactions((tx) => {
+  // find OP_RETURN data
+  const opReturn = tx.vout.find(val => val.scriptPubKey.type === "nulldata")?.scriptPubKey.hex;
+  if (!opReturn) {
+    return;
+  }
+
+  // parse OP_RETURN, do sanity checks and ensure the arrived receipt is for our deposit transaction
+  const chunks = OpReturnData.parse(opReturn);
+  if (chunks.length !== 4 || chunks[0] !== "IPBC" || chunks[2] !== depositTx) {
+    return;
+  }
+
+  const ipfsCID = chunks[3];
+
+  // your code here
+  console.log(ipfsCID);
+});
+
+// create a mainnet Wallet instance from WIF, assuming it was exported to system environment
+const wallet = await Wallet.fromId(
+  \`wif:mainnet:\${process.env.PRIVATE_WIF!}\`
+);
+
+// send pin request alongside with payment
+const response = await wallet.send([
+  OpReturnData.fromArray(["IPBC", "PIN", "https://gist.githubusercontent.com/mr-zwets/91caf52be18a94ba0afa93823e890bc9/raw"]),
+  {cashaddr: "bitcoincash:qrsl56haj6kcw7v7lw9kzuh89v74maemqsq8h4rfqy", value: 0.0025, unit: "bch"},
+]);
+
+// update deposit transaction hash here so that it will be used in receipt monitoring
+depositTx = response.txId;
+  `;
