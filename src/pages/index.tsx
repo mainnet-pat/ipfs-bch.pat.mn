@@ -50,7 +50,6 @@ export default function Home() {
   useEffect(() => {
     (async () => {
       const utxos = (await receiptWallet.getTokenUtxos(paramTokenId)).filter(val => val.token?.capability === NFTCapability.mutable);
-      console.log(utxos)
       const commitment = utxos[0].token?.commitment;
       if (!commitment || commitment.length !== 16) {
         return;
