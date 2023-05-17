@@ -9,7 +9,7 @@ import { CashAddressNetworkPrefix, binToNumberUint16LE, binToNumberUint32LE, bin
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { githubGist } from 'react-syntax-highlighter/dist/cjs/styles/hljs';
 
-const isTestnet = true;
+const isTestnet = false;
 const WalletClass = isTestnet ? TestNetWallet : Wallet;
 
 const convertCashaddr = (address: string): string => {
