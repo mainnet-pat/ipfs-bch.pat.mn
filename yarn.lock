@@ -16,15 +16,15 @@
   dependencies:
     regenerator-runtime "^0.13.11"
 
-"@bitauth/libauth@=v2.0.0-alpha.7":
-  version "2.0.0-alpha.7"
-  resolved "https://registry.yarnpkg.com/@bitauth/libauth/-/libauth-2.0.0-alpha.7.tgz#cbdf5d52c74a023ed6ece3bf01e546feb1cd5fb9"
-  integrity sha512-FI05AGI/OBX1VaUYibRmULQGRU0U/2M9lsOsFlpGPuqx//vMXasQoBOa463y4rgua5hCTVCtt8LyAd0Y+uXz1A==
-
 "@bitauth/libauth@^1.19.1":
   version "1.19.1"
   resolved "https://registry.yarnpkg.com/@bitauth/libauth/-/libauth-1.19.1.tgz#713751bbc09815b667f8fe00a1cc5b0f3bf45dd1"
   integrity sha512-R524tD5VwOt3QRHr7N518nqTVR/HKgfWL4LypekcGuNQN8R4PWScvuRcRzrY39A28kLztMv+TJdiKuMNbkU1ug==
+
+"@bitauth/libauth@^2.0.0-alpha.8":
+  version "2.0.0-alpha.8"
+  resolved "https://registry.yarnpkg.com/@bitauth/libauth/-/libauth-2.0.0-alpha.8.tgz#352ade2075517f1548e05553e7bb1c5e1023d1fe"
+  integrity sha512-KINAJbzg5pKs+WM8wCjWw6Ct/CeZG1JMrRXsIyPFztjNtwA5eeQL8eFkyquePsf8aZ5peRYK2eFPUDo/1rkg+w==
 
 "@eslint/eslintrc@^1.4.1":
   version "1.4.1"
@@ -2204,12 +2204,12 @@ lru-cache@^6.0.0:
   dependencies:
     yallist "^4.0.0"
 
-mainnet-js@^1.0.16:
-  version "1.0.16"
-  resolved "https://registry.yarnpkg.com/mainnet-js/-/mainnet-js-1.0.16.tgz#4185184ea2f8a118edf0e3ffa065dd693d3969f0"
-  integrity sha512-IKdCCmCEqee07fhjtFgOWrwFl16jAfbLucvas8v5MtnSyq29BWKJdiT/Q1CO5+6IQ5gAip9MeuD+Zl3h0Ff8Yw==
+mainnet-js@^1.1.22:
+  version "1.1.22"
+  resolved "https://registry.yarnpkg.com/mainnet-js/-/mainnet-js-1.1.22.tgz#854f4045500cace6981f163b88f8a7819d1566d8"
+  integrity sha512-UM7svVVB1ViN/uSz6YKHb+oYhUZFBReho5niv1Ig7WWMG6Iv+ZpLjVBZR/YlVkH74yXH2ACIU4qTQlMM1QZreA==
   dependencies:
-    "@bitauth/libauth" "=v2.0.0-alpha.7"
+    "@bitauth/libauth" "^2.0.0-alpha.8"
     async-mutex "^0.3.1"
     axios "^0.21.1"
     bchaddrjs-slp "^0.2.12"
