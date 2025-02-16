@@ -1,11 +1,11 @@
 import Head from 'next/head'
 import styles from '@/styles/Home.module.css'
 import Image from 'next/image'
-import { DefaultProvider, NFTCapability, OpReturnData, TestNetWallet, Wallet, binToHex, qrAddress } from 'mainnet-js'
+import { DefaultProvider, NFTCapability, OpReturnData, TestNetWallet, Wallet, binToHex, qrAddress, sha256, utf8ToBin } from 'mainnet-js'
 import { useCallback, useEffect, useState } from 'react';
 import { useDebounce } from "use-debounce";
 import axios from "axios";
-import { CashAddressNetworkPrefix, binToNumberUint16LE, binToNumberUint32LE, binToUtf8, decodeCashAddress, encodeCashAddress, hexToBin, numberToBinInt16LE, numberToBinInt32LE } from '@bitauth/libauth';
+import { CashAddressNetworkPrefix, binToBase58, binToNumberUint16LE, binToNumberUint32LE, binToUtf8, decodeCashAddress, encodeCashAddress, hexToBin, numberToBinInt16LE, numberToBinInt32LE } from '@bitauth/libauth';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { githubGist } from 'react-syntax-highlighter/dist/cjs/styles/hljs';
 
@@ -30,9 +30,67 @@ const uploadServiceUrl = isTestnet ? "http://localhost:8000/u/" : "https://ipfs.
 
 const paramTokenId = isTestnet ? "46a9cdaeb7f00c90896a874ecd093b0293fffa6521dbf676b0cacc39ddf791c3" : "9c909692e2dcc33150e8ddefb4ae4508b0780880773330d1fffd60cdb4cee6b1"
 
+const encode_varint = (n: number): Uint8Array => {
+  // Count the number of groups of 7 bits
+  // We need this pre-processing step since JavaScript doesn't allow dynamic memory resizing
+  let tmp = n;
+  let num_bytes = 1;
+  while (tmp > 0x7F) {
+    tmp = tmp >> 7;
+    ++num_bytes;
+  }
+
+  const buf = new Uint8Array(num_bytes);
+
+  tmp = n;
+  for (let i = 0; i < num_bytes; i++) {
+    // Set the first bit in the byte for each group of 7 bits
+    buf[i] = 0x80 | (tmp & 0x7F);
+    tmp = tmp >> 7;
+  }
+  // Unset the first bit of the last byte
+  buf[num_bytes - 1] &= 0x7F;
+
+  return buf;
+}
+
+export const getIPFSHash = (content: Uint8Array): Uint8Array => {
+  if (content.length > 500 * 1024) {
+    throw new Error("Max content size is 500 kilobytes");
+  }
+
+  const contentLengthVarint = encode_varint(content.length);
+  const meat = new Uint8Array([
+    ...hexToBin("080212"),
+    ...contentLengthVarint,
+    ...content,
+    ...hexToBin("18"),
+    ...contentLengthVarint
+  ]);
+
+  return new Uint8Array(
+    sha256.hash(
+      new Uint8Array([
+        ...hexToBin("0a"),
+        ...encode_varint(meat.length),
+        ...meat
+      ])
+    )
+  );
+}
+
+
+export const hashToCid = (hash: Uint8Array): string => {
+  if (hash.length !== 32) {
+    throw new Error("invalid hash");
+  }
+  return binToBase58(Uint8Array.from([0x12, 0x20, ...hash]));
+}
+
 export default function Home() {
   const [url, setUrl] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [info, setInfo] = useState<string>("");
   const [debouncedUrl] = useDebounce(url, 500);
   const [opReturnData, setOpReturnData] = useState<string>("");
   const [payString, setPayString] = useState<string>("");
@@ -75,7 +133,29 @@ export default function Home() {
     if (watchReceiptCancel) watchReceiptCancel();
   }, [watchDepositCancel, watchReceiptCancel]);
 
+
+
   const upload = useCallback(async (fileOrRawData: string | File) => {
+    try {
+      const hash = getIPFSHash(typeof fileOrRawData === "string" ? utf8ToBin(fileOrRawData) : new Uint8Array(await fileOrRawData.arrayBuffer()));
+      const cid = hashToCid(hash);
+      const cidUrl = `https://ipfs.pat.mn/ipfs/${cid}`;
+
+      const existsResponse = await fetch(cidUrl, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(1000),
+      });
+      if (existsResponse.ok) {
+        setInfo("No need to reupload the file, it already exists on IPFS");
+        setTimeout(() => setInfo(""), 10000);
+        setUrl(cidUrl);
+        setShowRawData(false);
+        setRawData("");
+        setPayString("");
+        return;
+      }
+    } catch {}
+
     let size = 0;
     const formData = new FormData();
     if (typeof fileOrRawData === "string") {
@@ -142,10 +222,12 @@ export default function Home() {
             setError(`Remote content exceeds ${maxSize/1024}kb (${Math.round(remoteSize/1024)} kb)`)
           }
 
-          setError("");
-          const data = OpReturnData.fromArray(["IPBC", "PIN", debouncedUrl]).buffer.toString("hex");
-          setOpReturnData(data);
-          setPayString(`${depositWallet.getDepositAddress()}?amount=${fee / 1e8}&op_return_raw=${data.slice(2)}`);
+          if (info.length === 0) {
+            setError("");
+            const data = OpReturnData.fromArray(["IPBC", "PIN", debouncedUrl]).buffer.toString("hex");
+            setOpReturnData(data);
+            setPayString(`${depositWallet.getDepositAddress()}?amount=${fee / 1e8}&op_return_raw=${data.slice(2)}`);
+          }
         })
         .catch((e) => {
           if (axios.isCancel(source)) {
@@ -245,6 +327,7 @@ export default function Home() {
             <button type="button" onClick={clear} className="inline-block px-6 py-2.5 bg-gray-200 text-gray-700 font-medium text-xs leading-tight uppercase rounded shadow-md hover:bg-gray-300 hover:shadow-lg  active:bg-gray-400 active:shadow-lg transition duration-150 ease-in-out">Clear</button>
           </div>
           {error.length > 0 && <div className="flex text-lg justify-center text-red-500">{error}</div>}
+          {info.length > 0 && <div className="flex text-lg justify-center text-green-500">{info}</div>}
         </div>
 
         {error.length === 0 && payString.length > 0 &&
